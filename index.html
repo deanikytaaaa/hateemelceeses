@@ -1,31 +1,342 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tripad — Code Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-// ─── default content per mode ────────────────────────────────────────────────
+  :root {
+    --bg:      #05070d;
+    --surface: #080c14;
+    --border:  #1a1f2e;
+    --cell-bg: #0d111a;
+    --text:    #cbd5e1;
+    --muted:   #4b5563;
+    --dim:     #1f2937;
 
-const DEFAULTS = {
-  html: {
-    label: "HTML",
-    accent: "#f97316",
-    cells: [
-      {
-        id: 1, title: "Structure 01", collapsed: false,
-        code: `<article class="card">
+    --html:  #f97316;
+    --css:   #06b6d4;
+    --combo: #a78bfa;
+  }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    flex-shrink: 0;
+    gap: 0;
+  }
+
+  #logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    background: linear-gradient(90deg, var(--html), var(--combo));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-right: 8px;
+    letter-spacing: -0.5px;
+  }
+  #logo-v {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-right: 24px;
+    -webkit-text-fill-color: var(--dim);
+  }
+
+  .mode-tab {
+    height: 100%;
+    padding: 0 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .mode-tab[data-mode="html"].active  { color: var(--html);  border-color: var(--html); }
+  .mode-tab[data-mode="css"].active   { color: var(--css);   border-color: var(--css); }
+  .mode-tab[data-mode="combo"].active { color: var(--combo); border-color: var(--combo); }
+
+  #stats {
+    margin-left: auto;
+    display: flex;
+    gap: 14px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--dim);
+  }
+  #stats span { transition: color 0.2s; }
+
+  /* ── PANEL ── */
+  #panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* panel header */
+  #panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #panel-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  #panel-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  #panel-count { font-size: 10px; color: var(--dim); }
+  #panel-actions { margin-left: auto; display: flex; gap: 6px; }
+
+  .sm-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .sm-btn:hover { border-color: var(--muted); color: var(--text); }
+  .sm-btn.add-btn {
+    color: #000;
+    font-weight: 700;
+    border: none;
+  }
+
+  /* scrollable cell list */
+  #cell-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  #cell-list::-webkit-scrollbar { width: 4px; }
+  #cell-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── CELL ── */
+  .cell {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    background: var(--cell-bg);
+    box-shadow: 0 2px 20px #00000050;
+    transition: box-shadow 0.2s;
+  }
+  .cell:hover { box-shadow: 0 4px 30px #00000080; }
+
+  .cell-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .cell-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .cell-title {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    outline: none;
+    width: 90px;
+  }
+  .cell-index { color: var(--dim); font-size: 11px; margin-left: auto; }
+  .cell-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .cell-btn.danger { color: #ef4444; }
+  .cell-btn:hover { border-color: var(--muted); }
+  .cell-btn.danger:hover { border-color: #ef4444; }
+
+  .cell-body { display: flex; height: 300px; }
+  .cell-body.collapsed { display: none; }
+
+  .editor-side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+  }
+  .tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .editor-tab {
+    padding: 6px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .editor-tab.active { color: var(--text); }
+
+  textarea.code {
+    flex: 1;
+    background: var(--cell-bg);
+    color: var(--text);
+    border: none;
+    padding: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+  }
+
+  .preview-side {
+    flex: 1;
+    background: #fff;
+  }
+  .preview-side iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+
+  /* add-cell button at bottom */
+  .add-cell-bottom {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--dim);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+    transition: all 0.2s;
+  }
+  .add-cell-bottom:hover { border-color: currentColor; }
+
+  /* empty state */
+  .empty {
+    text-align: center;
+    color: var(--dim);
+    padding: 60px 0;
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <span id="logo">tripad</span>
+  <span id="logo-v">v2</span>
+
+  <button class="mode-tab active" data-mode="html" onclick="switchMode('html')">HTML</button>
+  <button class="mode-tab" data-mode="css"  onclick="switchMode('css')">CSS</button>
+  <button class="mode-tab" data-mode="combo" onclick="switchMode('combo')">HTML + CSS</button>
+
+  <div id="stats">
+    <span id="stat-html"></span>
+    <span id="stat-css"></span>
+    <span id="stat-combo"></span>
+  </div>
+</div>
+
+<!-- PANEL -->
+<div id="panel">
+  <div id="panel-header">
+    <div id="panel-dot"></div>
+    <span id="panel-label"></span>
+    <span id="panel-count"></span>
+    <div id="panel-actions">
+      <button class="sm-btn" onclick="expandAll()">↕ all</button>
+      <button class="sm-btn" onclick="collapseAll()">— all</button>
+      <button class="sm-btn add-btn" id="add-btn" onclick="addCell()">+ add</button>
+    </div>
+  </div>
+  <div id="cell-list"></div>
+</div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────────────────────
+let currentMode = 'html';
+let uid = 100;
+const nextId = () => uid++;
+
+const ACCENT = { html: '#f97316', css: '#06b6d4', combo: '#a78bfa' };
+const LABEL  = { html: 'HTML', css: 'CSS', combo: 'HTML + CSS' };
+
+const state = {
+  html: [
+    {
+      id: 1, title: 'Structure 01', collapsed: false,
+      code: `<article class="card">
   <header>
     <span class="tag">Featured</span>
     <h2>HTML Structure</h2>
   </header>
-  <p>
-    HTML defines the <strong>structure</strong> and
-    <em>meaning</em> of your content.
-  </p>
-  <footer>
-    <a href="#">Read more →</a>
-  </footer>
+  <p>HTML defines the <strong>structure</strong> and <em>meaning</em> of your content.</p>
+  <footer><a href="#">Read more →</a></footer>
 </article>`,
-      },
-      {
-        id: 2, title: "Structure 02", collapsed: false,
-        code: `<nav>
+    },
+    {
+      id: 2, title: 'Structure 02', collapsed: false,
+      code: `<nav>
   <ul>
     <li><a href="#">Home</a></li>
     <li><a href="#">About</a></li>
@@ -33,18 +344,14 @@ const DEFAULTS = {
     <li><a href="#">Contact</a></li>
   </ul>
 </nav>`,
-      },
-    ],
-  },
-  css: {
-    label: "CSS",
-    accent: "#06b6d4",
-    cells: [
-      {
-        id: 1, title: "Style 01", collapsed: false,
-        code: `/* gradient text */
+    },
+  ],
+  css: [
+    {
+      id: 3, title: 'Style 01', collapsed: false,
+      code: `/* gradient text */
 .gradient-text {
-  font-size: 3rem;
+  font-size: 2.5rem;
   font-weight: 900;
   background: linear-gradient(135deg, #f97316, #ec4899);
   -webkit-background-clip: text;
@@ -60,10 +367,10 @@ const DEFAULTS = {
   border-radius: 16px;
   padding: 24px;
 }`,
-      },
-      {
-        id: 2, title: "Style 02", collapsed: false,
-        code: `/* neon glow button */
+    },
+    {
+      id: 4, title: 'Style 02', collapsed: false,
+      code: `/* neon button */
 .neon-btn {
   padding: 12px 28px;
   border: 2px solid #06b6d4;
@@ -75,30 +382,24 @@ const DEFAULTS = {
   letter-spacing: 3px;
   font-size: 12px;
   transition: all 0.3s;
-  box-shadow: 0 0 8px #06b6d4, inset 0 0 8px transparent;
 }
-
 .neon-btn:hover {
   background: #06b6d4;
   color: #000;
-  box-shadow: 0 0 24px #06b6d4, 0 0 48px #06b6d440;
+  box-shadow: 0 0 24px #06b6d4;
 }`,
-      },
-    ],
-  },
-  combined: {
-    label: "HTML + CSS",
-    accent: "#a78bfa",
-    cells: [
-      {
-        id: 1, title: "Combined 01", collapsed: false,
-        html: `<div class="hero">
+    },
+  ],
+  combo: [
+    {
+      id: 5, title: 'Combined 01', collapsed: false,
+      html: `<div class="hero">
   <div class="glow"></div>
   <h1>Hello World</h1>
   <p>HTML + CSS together</p>
   <button onclick="this.textContent='🎉 Clicked!'">Launch</button>
 </div>`,
-        css: `* { box-sizing: border-box; margin: 0; padding: 0; }
+      css: `* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   display: flex; align-items: center; justify-content: center;
   min-height: 100vh; background: #08010f;
@@ -110,27 +411,27 @@ body {
 }
 .glow {
   position: absolute; inset: 0; border-radius: 24px;
-  background: radial-gradient(circle at 50% 50%, #a78bfa22, transparent 70%);
+  background: radial-gradient(circle, #a78bfa22, transparent 70%);
   border: 1px solid #a78bfa33; z-index: -1;
 }
 h1 { font-size: 3rem; color: #a78bfa; margin-bottom: 12px; }
-p { color: #6b7280; margin-bottom: 32px; }
+p  { color: #6b7280; margin-bottom: 32px; }
 button {
   padding: 12px 32px; background: #a78bfa; color: #08010f;
   border: none; border-radius: 8px; cursor: pointer;
   font-weight: 700; font-size: 14px; transition: all 0.2s;
 }
 button:hover { transform: scale(1.05); box-shadow: 0 0 24px #a78bfa88; }`,
-      },
-      {
-        id: 2, title: "Combined 02", collapsed: false,
-        html: `<div class="grid">
+    },
+    {
+      id: 6, title: 'Combined 02', collapsed: false,
+      html: `<div class="grid">
   <div class="box" style="--i:0">01</div>
   <div class="box" style="--i:1">02</div>
   <div class="box" style="--i:2">03</div>
   <div class="box" style="--i:3">04</div>
 </div>`,
-        css: `* { box-sizing: border-box; }
+      css: `* { box-sizing: border-box; }
 body {
   display: flex; align-items: center; justify-content: center;
   min-height: 100vh; margin: 0; background: #05070d;
@@ -147,338 +448,282 @@ body {
   from { transform: scale(0) rotate(20deg); opacity: 0; }
   to   { transform: scale(1) rotate(0deg);  opacity: 1; }
 }`,
-      },
-    ],
-  },
+    },
+  ],
 };
 
-let _nextId = 10;
-const uid = () => _nextId++;
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
+// ── BUILD SRCDOC ─────────────────────────────────────────────────────────────
 function buildSrcdoc(mode, cell) {
-  if (mode === "html") {
+  if (mode === 'html') {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>body{font-family:sans-serif;padding:20px;color:#222;}</style>
+<style>body{font-family:sans-serif;padding:20px;color:#222;line-height:1.6;}a{color:#3b82f6;}.tag{background:#f97316;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;}</style>
 </head><body>${cell.code}</body></html>`;
   }
-  if (mode === "css") {
+  if (mode === 'css') {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
-body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f0f0f;font-family:sans-serif;}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:100vh;margin:0;background:#0f0f0f;font-family:sans-serif;}
 ${cell.code}
 </style></head><body>
 <div class="gradient-text">Style Preview</div>
-<div class="glass" style="margin:20px;color:#eee;">Glass card works!</div>
+<div class="glass" style="color:#eee;font-size:14px;">Glass card</div>
 <button class="neon-btn">Neon Button</button>
 </body></html>`;
   }
-  // combined
+  // combo
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>${cell.css || ""}</style>
-</head><body>${cell.html || ""}</body></html>`;
+<style>${cell.css || ''}</style>
+</head><body>${cell.html || ''}</body></html>`;
 }
 
-// ─── single cell ─────────────────────────────────────────────────────────────
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function render() {
+  const accent = ACCENT[currentMode];
+  const cells  = state[currentMode];
 
-function Cell({ mode, cell, index, accent, onUpdate, onDelete, onDuplicate }) {
-  const [tab, setTab] = useState("html"); // only for combined
-  const iframeRef = useRef(null);
+  // update tabs
+  document.querySelectorAll('.mode-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mode === currentMode);
+  });
 
-  const set = (changes) => onUpdate(cell.id, changes);
+  // panel header
+  document.getElementById('panel-dot').style.cssText =
+    `background:${accent};box-shadow:0 0 8px ${accent};width:8px;height:8px;border-radius:50%;`;
+  document.getElementById('panel-label').style.color = accent;
+  document.getElementById('panel-label').textContent = LABEL[currentMode];
+  document.getElementById('panel-count').textContent =
+    `${cells.length} cell${cells.length !== 1 ? 's' : ''}`;
+  document.getElementById('add-btn').style.background = accent;
 
-  useEffect(() => {
-    if (iframeRef.current) {
-      iframeRef.current.srcdoc = buildSrcdoc(mode, cell);
-    }
-  }, [mode, cell]);
+  // stats
+  document.getElementById('stat-html').textContent  = state.html.length + ' html';
+  document.getElementById('stat-html').style.color  = currentMode === 'html'  ? ACCENT.html  : '';
+  document.getElementById('stat-css').textContent   = state.css.length  + ' css';
+  document.getElementById('stat-css').style.color   = currentMode === 'css'   ? ACCENT.css   : '';
+  document.getElementById('stat-combo').textContent = state.combo.length + ' combo';
+  document.getElementById('stat-combo').style.color = currentMode === 'combo' ? ACCENT.combo : '';
 
-  const editorValue =
-    mode === "combined" ? (tab === "html" ? cell.html : cell.css) : cell.code;
+  // cells
+  const list = document.getElementById('cell-list');
+  list.innerHTML = '';
 
-  const handleChange = (val) => {
-    if (mode === "combined") set({ [tab]: val });
-    else set({ code: val });
-  };
-
-  const handleTab = (e) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const s = e.target.selectionStart, en = e.target.selectionEnd;
-      const v = e.target.value;
-      handleChange(v.substring(0, s) + "  " + v.substring(en));
-      setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 2; }, 0);
-    }
-  };
-
-  return (
-    <div style={{
-      border: `1px solid #1a1f2e`,
-      borderRadius: 10,
-      overflow: "hidden",
-      marginBottom: 16,
-      background: "#0d111a",
-      boxShadow: "0 2px 20px #00000060",
-    }}>
-      {/* header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "8px 12px", background: "#080c14",
-        borderBottom: "1px solid #1a1f2e",
-      }}>
-        <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, boxShadow: `0 0 6px ${accent}`, flexShrink: 0 }} />
-        <input
-          value={cell.title}
-          onChange={e => set({ title: e.target.value })}
-          style={{
-            background: "transparent", border: "none", color: "#6b7280",
-            fontSize: 11, fontFamily: "monospace", letterSpacing: 1, outline: "none", width: 90,
-          }}
-        />
-        <span style={{ color: "#1f2937", fontSize: 11, marginLeft: "auto" }}>#{String(index + 1).padStart(2, "0")}</span>
-        <Btn onClick={() => set({ collapsed: !cell.collapsed })}>{cell.collapsed ? "▶ show" : "▼ hide"}</Btn>
-        <Btn onClick={() => onDuplicate(cell.id)}>⧉</Btn>
-        <Btn danger onClick={() => onDelete(cell.id)}>✕</Btn>
-      </div>
-
-      {!cell.collapsed && (
-        <div style={{ display: "flex", height: 300 }}>
-          {/* editor */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRight: "1px solid #1a1f2e" }}>
-            {/* tabs for combined only */}
-            {mode === "combined" && (
-              <div style={{ display: "flex", background: "#080c14", borderBottom: "1px solid #1a1f2e" }}>
-                {["html", "css"].map(t => (
-                  <button key={t} onClick={() => setTab(t)} style={{
-                    padding: "6px 16px", background: "none", border: "none",
-                    borderBottom: tab === t ? `2px solid ${accent}` : "2px solid transparent",
-                    color: tab === t ? "#e2e8f0" : "#4b5563",
-                    cursor: "pointer", fontSize: 11, fontFamily: "monospace",
-                    textTransform: "uppercase", letterSpacing: 1,
-                  }}>{t}</button>
-                ))}
-              </div>
-            )}
-            <textarea
-              value={editorValue}
-              onChange={e => handleChange(e.target.value)}
-              onKeyDown={handleTab}
-              spellCheck={false}
-              style={{
-                flex: 1, background: "#0d111a", color: "#cbd5e1", border: "none",
-                padding: 14, fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-                fontSize: 12, lineHeight: 1.7, resize: "none", outline: "none", tabSize: 2,
-              }}
-            />
-          </div>
-          {/* preview */}
-          <div style={{ flex: 1, background: "#fff" }}>
-            <iframe
-              ref={iframeRef}
-              srcDoc={buildSrcdoc(mode, cell)}
-              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-              sandbox="allow-scripts"
-              title={`preview-${cell.id}`}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Btn({ children, onClick, danger }) {
-  return (
-    <button onClick={onClick} style={{
-      background: "none", border: "1px solid #1f2937",
-      color: danger ? "#ef4444" : "#6b7280",
-      borderRadius: 4, cursor: "pointer", padding: "2px 8px", fontSize: 11, fontFamily: "monospace",
-    }}>{children}</button>
-  );
-}
-
-// ─── panel (one mode) ────────────────────────────────────────────────────────
-
-function Panel({ mode, config, cells, setCells }) {
-  const { accent, label } = config;
-
-  const addCell = () => {
-    const id = uid();
-    const base = mode === "combined"
-      ? { id, title: `Cell ${id}`, collapsed: false, html: `<div class="box">\n  <h2>New Cell</h2>\n</div>`, css: `body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#111;font-family:sans-serif;color:#eee;}\n.box{text-align:center;}` }
-      : { id, title: `Cell ${id}`, collapsed: false, code: mode === "css" ? `/* write your CSS here */\n.example {\n  color: red;\n}` : `<div class="example">\n  <h2>New Cell</h2>\n</div>` };
-    setCells(prev => [...prev, base]);
-  };
-
-  const updateCell = useCallback((id, changes) => {
-    setCells(prev => prev.map(c => c.id === id ? { ...c, ...changes } : c));
-  }, []);
-
-  const deleteCell = useCallback((id) => {
-    setCells(prev => prev.filter(c => c.id !== id));
-  }, []);
-
-  const duplicateCell = useCallback((id) => {
-    setCells(prev => {
-      const idx = prev.findIndex(c => c.id === id);
-      const src = prev[idx];
-      const copy = { ...src, id: uid(), title: src.title + " copy" };
-      const next = [...prev];
-      next.splice(idx + 1, 0, copy);
-      return next;
+  if (cells.length === 0) {
+    list.innerHTML = '<div class="empty">no cells — add one ↑</div>';
+  } else {
+    cells.forEach((cell, i) => {
+      list.appendChild(createCellEl(cell, i));
     });
-  }, []);
+  }
 
-  const collapseAll = () => setCells(prev => prev.map(c => ({ ...c, collapsed: true })));
-  const expandAll = () => setCells(prev => prev.map(c => ({ ...c, collapsed: false })));
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* panel header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "10px 16px", background: "#080c14",
-        borderBottom: "1px solid #1a1f2e", flexShrink: 0,
-      }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: "50%",
-          background: accent, boxShadow: `0 0 8px ${accent}`,
-        }} />
-        <span style={{ color: accent, fontSize: 11, fontFamily: "monospace", letterSpacing: 3, textTransform: "uppercase" }}>
-          {label}
-        </span>
-        <span style={{ color: "#374151", fontSize: 10, marginLeft: 4 }}>
-          {cells.length} cell{cells.length !== 1 ? "s" : ""}
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <Btn onClick={expandAll}>↕ all</Btn>
-          <Btn onClick={collapseAll}>— all</Btn>
-          <button onClick={addCell} style={{
-            background: accent, border: "none", color: "#000",
-            borderRadius: 5, cursor: "pointer", padding: "4px 12px",
-            fontSize: 11, fontFamily: "monospace", fontWeight: 700,
-          }}>+ add</button>
-        </div>
-      </div>
-
-      {/* scrollable cells */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 0" }}>
-        {cells.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#374151", padding: "48px 0", fontSize: 12, letterSpacing: 2 }}>
-            no cells — add one ↑
-          </div>
-        ) : (
-          cells.map((cell, i) => (
-            <Cell
-              key={cell.id}
-              mode={mode}
-              cell={cell}
-              index={i}
-              accent={accent}
-              onUpdate={updateCell}
-              onDelete={deleteCell}
-              onDuplicate={duplicateCell}
-            />
-          ))
-        )}
-        <button
-          onClick={addCell}
-          style={{
-            width: "100%", padding: 12, background: "transparent",
-            border: `1px dashed #1a1f2e`, color: "#374151",
-            borderRadius: 8, cursor: "pointer", fontSize: 11,
-            fontFamily: "monospace", letterSpacing: 2, marginBottom: 14,
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={e => { e.target.style.borderColor = accent; e.target.style.color = accent; }}
-          onMouseLeave={e => { e.target.style.borderColor = "#1a1f2e"; e.target.style.color = "#374151"; }}
-        >+ new cell</button>
-      </div>
-    </div>
-  );
+  // add-cell button
+  const addBottom = document.createElement('button');
+  addBottom.className = 'add-cell-bottom';
+  addBottom.textContent = '+ new cell';
+  addBottom.style.color = accent; // inherit hover
+  addBottom.addEventListener('mouseenter', () => addBottom.style.borderColor = accent);
+  addBottom.addEventListener('mouseleave', () => addBottom.style.borderColor = '');
+  addBottom.onclick = addCell;
+  list.appendChild(addBottom);
 }
 
-// ─── root app ─────────────────────────────────────────────────────────────────
+function createCellEl(cell, index) {
+  const mode   = currentMode;
+  const accent = ACCENT[mode];
 
-const MODES = ["html", "css", "combined"];
+  const wrapper = document.createElement('div');
+  wrapper.className = 'cell';
+  wrapper.dataset.id = cell.id;
 
-export default function App() {
-  const [active, setActive] = useState("combined");
-  const [htmlCells, setHtmlCells] = useState(DEFAULTS.html.cells);
-  const [cssCells, setCssCells] = useState(DEFAULTS.css.cells);
-  const [combinedCells, setCombinedCells] = useState(DEFAULTS.combined.cells);
+  // ── header
+  const header = document.createElement('div');
+  header.className = 'cell-header';
+  header.innerHTML = `
+    <div class="cell-dot" style="background:${accent};box-shadow:0 0 6px ${accent}"></div>
+    <input class="cell-title" value="${esc(cell.title)}" title="rename">
+    <span class="cell-index">#${String(index + 1).padStart(2, '0')}</span>
+    <button class="cell-btn toggle-btn">${cell.collapsed ? '▶ show' : '▼ hide'}</button>
+    <button class="cell-btn dup-btn">⧉</button>
+    <button class="cell-btn danger del-btn">✕</button>
+  `;
 
-  const cellsMap = { html: [htmlCells, setHtmlCells], css: [cssCells, setCssCells], combined: [combinedCells, setCombinedCells] };
-  const [cells, setCells] = cellsMap[active];
+  // title rename
+  header.querySelector('.cell-title').addEventListener('input', e => {
+    getCellById(cell.id).title = e.target.value;
+    updateStats();
+  });
 
-  const cfg = DEFAULTS[active];
+  // toggle
+  header.querySelector('.toggle-btn').addEventListener('click', () => {
+    getCellById(cell.id).collapsed = !getCellById(cell.id).collapsed;
+    render();
+  });
 
-  return (
-    <div style={{
-      height: "100vh", display: "flex", flexDirection: "column",
-      background: "#05070d", fontFamily: "monospace",
-      overflow: "hidden",
-    }}>
-      {/* ── top bar ── */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 0,
-        height: 48, background: "#080c14", borderBottom: "1px solid #1a1f2e",
-        flexShrink: 0, paddingLeft: 16,
-      }}>
-        {/* logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 24 }}>
-          <span style={{
-            fontSize: 16, fontWeight: 900, letterSpacing: -1,
-            background: "linear-gradient(90deg,#f97316,#a78bfa)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          }}>tripad</span>
-          <span style={{ color: "#374151", fontSize: 10, letterSpacing: 2 }}>v2</span>
-        </div>
+  // duplicate
+  header.querySelector('.dup-btn').addEventListener('click', () => {
+    const src = getCellById(cell.id);
+    const copy = JSON.parse(JSON.stringify(src));
+    copy.id = nextId();
+    copy.title = src.title + ' copy';
+    const arr = state[mode];
+    arr.splice(arr.indexOf(src) + 1, 0, copy);
+    render();
+  });
 
-        {/* mode tabs */}
-        <div style={{ display: "flex", height: "100%" }}>
-          {MODES.map(m => {
-            const c = DEFAULTS[m];
-            const isActive = active === m;
-            return (
-              <button key={m} onClick={() => setActive(m)} style={{
-                height: "100%", padding: "0 20px",
-                background: "none", border: "none",
-                borderBottom: isActive ? `2px solid ${c.accent}` : "2px solid transparent",
-                color: isActive ? c.accent : "#4b5563",
-                cursor: "pointer", fontSize: 11,
-                letterSpacing: 2, textTransform: "uppercase",
-                transition: "all 0.15s",
-              }}>{c.label}</button>
-            );
-          })}
-        </div>
+  // delete
+  header.querySelector('.del-btn').addEventListener('click', () => {
+    state[mode] = state[mode].filter(c => c.id !== cell.id);
+    render();
+  });
 
-        <div style={{ marginLeft: "auto", paddingRight: 16, display: "flex", gap: 8, alignItems: "center" }}>
-          {MODES.map(m => {
-            const [c] = cellsMap[m];
-            const col = DEFAULTS[m].accent;
-            return (
-              <span key={m} style={{
-                fontSize: 10, color: active === m ? col : "#374151",
-                letterSpacing: 1, transition: "color 0.2s",
-              }}>{c.length} {DEFAULTS[m].label.split(" ")[0].toLowerCase()}</span>
-            );
-          })}
-        </div>
-      </div>
+  wrapper.appendChild(header);
 
-      {/* ── panel ── */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
-        <Panel
-          key={active}
-          mode={active}
-          config={cfg}
-          cells={cells}
-          setCells={setCells}
-        />
-      </div>
-    </div>
-  );
+  // ── body
+  const body = document.createElement('div');
+  body.className = 'cell-body' + (cell.collapsed ? ' collapsed' : '');
+
+  // editor side
+  const editorSide = document.createElement('div');
+  editorSide.className = 'editor-side';
+
+  if (mode === 'combo') {
+    // tab bar
+    const tabBar = document.createElement('div');
+    tabBar.className = 'tab-bar';
+    tabBar.innerHTML = `
+      <button class="editor-tab active" data-tab="html" style="border-color:${accent}">html</button>
+      <button class="editor-tab" data-tab="css">css</button>
+    `;
+    editorSide.appendChild(tabBar);
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'code';
+    textarea.value = cell.html || '';
+
+    tabBar.querySelectorAll('.editor-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabBar.querySelectorAll('.editor-tab').forEach(b => {
+          b.classList.remove('active');
+          b.style.borderColor = '';
+        });
+        btn.classList.add('active');
+        btn.style.borderColor = accent;
+        const t = btn.dataset.tab;
+        textarea.value = getCellById(cell.id)[t] || '';
+        textarea.dataset.tab = t;
+      });
+    });
+
+    textarea.dataset.tab = 'html';
+    textarea.addEventListener('input', e => {
+      getCellById(cell.id)[e.target.dataset.tab] = e.target.value;
+      refreshPreview(cell.id);
+    });
+    textarea.addEventListener('keydown', tabKey);
+    editorSide.appendChild(textarea);
+  } else {
+    const textarea = document.createElement('textarea');
+    textarea.className = 'code';
+    textarea.value = cell.code || '';
+    textarea.addEventListener('input', e => {
+      getCellById(cell.id).code = e.target.value;
+      refreshPreview(cell.id);
+    });
+    textarea.addEventListener('keydown', tabKey);
+    editorSide.appendChild(textarea);
+  }
+
+  // preview side
+  const previewSide = document.createElement('div');
+  previewSide.className = 'preview-side';
+  const iframe = document.createElement('iframe');
+  iframe.sandbox = 'allow-scripts';
+  iframe.dataset.cellId = cell.id;
+  iframe.srcdoc = buildSrcdoc(mode, cell);
+  previewSide.appendChild(iframe);
+
+  body.appendChild(editorSide);
+  body.appendChild(previewSide);
+  wrapper.appendChild(body);
+
+  return wrapper;
 }
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function getCellById(id) {
+  return state[currentMode].find(c => c.id === id);
+}
+
+function refreshPreview(cellId) {
+  const cell = getCellById(cellId);
+  const iframe = document.querySelector(`iframe[data-cell-id="${cellId}"]`);
+  if (iframe && cell) iframe.srcdoc = buildSrcdoc(currentMode, cell);
+}
+
+function updateStats() {
+  document.getElementById('stat-html').textContent  = state.html.length + ' html';
+  document.getElementById('stat-css').textContent   = state.css.length  + ' css';
+  document.getElementById('stat-combo').textContent = state.combo.length + ' combo';
+  document.getElementById('panel-count').textContent =
+    `${state[currentMode].length} cell${state[currentMode].length !== 1 ? 's' : ''}`;
+}
+
+function tabKey(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = e.target.selectionStart, en = e.target.selectionEnd;
+    const v = e.target.value;
+    e.target.value = v.substring(0, s) + '  ' + v.substring(en);
+    e.target.selectionStart = e.target.selectionEnd = s + 2;
+    e.target.dispatchEvent(new Event('input'));
+  }
+}
+
+function esc(str) {
+  return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── ACTIONS ──────────────────────────────────────────────────────────────────
+function switchMode(mode) {
+  currentMode = mode;
+  render();
+}
+
+function addCell() {
+  const id = nextId();
+  const accent = ACCENT[currentMode];
+  const newCell = currentMode === 'combo'
+    ? {
+        id, title: `Cell ${id}`, collapsed: false,
+        html: `<div class="box">\n  <h2>New Cell</h2>\n  <p>Edit me!</p>\n</div>`,
+        css: `* { box-sizing: border-box; }\nbody {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  min-height: 100vh;\n  margin: 0;\n  background: #111;\n  font-family: sans-serif;\n  color: #eee;\n}\n.box { text-align: center; }`,
+      }
+    : {
+        id, title: `Cell ${id}`, collapsed: false,
+        code: currentMode === 'css'
+          ? `/* Your CSS here */\n.my-element {\n  color: red;\n}`
+          : `<div class="my-element">\n  <h2>New Cell</h2>\n  <p>Edit me!</p>\n</div>`,
+      };
+  state[currentMode].push(newCell);
+  render();
+  // scroll to bottom
+  setTimeout(() => {
+    const list = document.getElementById('cell-list');
+    list.scrollTop = list.scrollHeight;
+  }, 50);
+}
+
+function collapseAll() {
+  state[currentMode].forEach(c => c.collapsed = true);
+  render();
+}
+
+function expandAll() {
+  state[currentMode].forEach(c => c.collapsed = false);
+  render();
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
