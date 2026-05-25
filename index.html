@@ -86,11 +86,45 @@
     margin-left: auto;
     display: flex;
     gap: 14px;
+    align-items: center;
     font-size: 10px;
     letter-spacing: 1px;
     color: var(--dim);
   }
   #stats span { transition: color 0.2s; }
+
+  #save-indicator {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #22c55e;
+    opacity: 0;
+    transition: opacity 0.4s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  #save-indicator::before {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
+    display: inline-block;
+  }
+
+  #clear-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: #ef4444;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
+    transition: border-color 0.15s;
+  }
+  #clear-btn:hover { border-color: #ef4444; }
 
   /* ── PANEL ── */
   #panel {
@@ -294,6 +328,8 @@
     <span id="stat-html"></span>
     <span id="stat-css"></span>
     <span id="stat-combo"></span>
+    <span id="save-indicator">saved</span>
+    <button id="clear-btn" onclick="clearStorage()" title="Reset semua ke default">↺ reset</button>
   </div>
 </div>
 
@@ -550,12 +586,14 @@ function createCellEl(cell, index) {
   header.querySelector('.cell-title').addEventListener('input', e => {
     getCellById(cell.id).title = e.target.value;
     updateStats();
+    scheduleSave();
   });
 
   // toggle
   header.querySelector('.toggle-btn').addEventListener('click', () => {
     getCellById(cell.id).collapsed = !getCellById(cell.id).collapsed;
     render();
+    scheduleSave();
   });
 
   // duplicate
@@ -567,12 +605,14 @@ function createCellEl(cell, index) {
     const arr = state[mode];
     arr.splice(arr.indexOf(src) + 1, 0, copy);
     render();
+    scheduleSave();
   });
 
   // delete
   header.querySelector('.del-btn').addEventListener('click', () => {
     state[mode] = state[mode].filter(c => c.id !== cell.id);
     render();
+    scheduleSave();
   });
 
   wrapper.appendChild(header);
@@ -617,6 +657,7 @@ function createCellEl(cell, index) {
     textarea.addEventListener('input', e => {
       getCellById(cell.id)[e.target.dataset.tab] = e.target.value;
       refreshPreview(cell.id);
+      scheduleSave();
     });
     textarea.addEventListener('keydown', tabKey);
     editorSide.appendChild(textarea);
@@ -627,6 +668,7 @@ function createCellEl(cell, index) {
     textarea.addEventListener('input', e => {
       getCellById(cell.id).code = e.target.value;
       refreshPreview(cell.id);
+      scheduleSave();
     });
     textarea.addEventListener('keydown', tabKey);
     editorSide.appendChild(textarea);
@@ -682,6 +724,44 @@ function esc(str) {
   return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ── LOCALSTORAGE ─────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'tripad_v2_state';
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    showSaved();
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.html)  state.html  = saved.html;
+    if (saved.css)   state.css   = saved.css;
+    if (saved.combo) state.combo = saved.combo;
+    // update uid so new cells don't clash
+    const allIds = [...state.html, ...state.css, ...state.combo].map(c => c.id);
+    if (allIds.length) uid = Math.max(...allIds) + 1;
+  } catch(e) {}
+}
+
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 800);
+}
+
+function showSaved() {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  el.style.opacity = '1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => el.style.opacity = '0', 1500);
+}
+
 // ── ACTIONS ──────────────────────────────────────────────────────────────────
 function switchMode(mode) {
   currentMode = mode;
@@ -705,7 +785,7 @@ function addCell() {
       };
   state[currentMode].push(newCell);
   render();
-  // scroll to bottom
+  scheduleSave();
   setTimeout(() => {
     const list = document.getElementById('cell-list');
     list.scrollTop = list.scrollHeight;
@@ -715,14 +795,23 @@ function addCell() {
 function collapseAll() {
   state[currentMode].forEach(c => c.collapsed = true);
   render();
+  scheduleSave();
 }
 
 function expandAll() {
   state[currentMode].forEach(c => c.collapsed = false);
   render();
+  scheduleSave();
+}
+
+function clearStorage() {
+  if (!confirm('Reset semua cells ke default? Data yang ada akan hilang.')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+  location.reload();
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
+loadState();
 render();
 </script>
 </body>
